@@ -6,10 +6,10 @@ permissions:
 jobs:
   apt:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - run: |
-          cat /etc/resolv.conf; resolvectl status 2>/dev/null | head -20 || true
-          getent hosts azure.archive.ubuntu.com archive.ubuntu.com security.ubuntu.com || true
-          time sudo apt-get update
-          time sudo apt-get install -y --download-only libfuse-dev nfs-common git-annex
+          for h in github.com azure.archive.ubuntu.com archive.ubuntu.com security.ubuntu.com; do echo "$h: $(getent hosts $h | head -1)"; done
+          dig +short +time=3 +tries=1 @1.1.1.1 archive.ubuntu.com || echo "dig 1.1.1.1 failed"
+          dig +short +time=3 +tries=1 @8.8.8.8 azure.archive.ubuntu.com || echo "dig 8.8.8.8 failed"
+          dig +short +time=3 +tries=1 @168.63.129.16 archive.ubuntu.com || echo "dig azure dns failed"
