@@ -1,0 +1,15 @@
+name: gh-apt-probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          cat /etc/resolv.conf; resolvectl status 2>/dev/null | head -20 || true
+          getent hosts azure.archive.ubuntu.com archive.ubuntu.com security.ubuntu.com || true
+          time sudo apt-get update
+          time sudo apt-get install -y --download-only libfuse-dev nfs-common git-annex
