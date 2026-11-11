@@ -96,10 +96,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.mod-cache }}
-          key: bp-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: bp2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            bp-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
-            bp-go-mod-
+            bp2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            bp2-go-mod-
 
       # The build cache holds compiled artifacts which are specific to the
       # OS, arch and Go version, so it is kept per job.
@@ -107,10 +107,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.build-cache }}
-          key: bp-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: bp2-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            bp-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
-            bp-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
+            bp2-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+            bp2-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
 
       - name: Set environment variables
         run: |
@@ -154,11 +154,15 @@ jobs:
           rclone version
 
       - name: Run tests
+        # ci-bench: keep going on test failures so both variants run identical steps and save caches
+        continue-on-error: true
         run: |
           make quicktest
         if: matrix.quicktest
 
       - name: Race test
+        # ci-bench: keep going on test failures so both variants run identical steps and save caches
+        continue-on-error: true
         run: |
           make racequicktest
         if: matrix.racequicktest
@@ -214,10 +218,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/go/pkg/mod
-          key: bp-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: bp2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            bp-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
-            bp-go-mod-
+            bp2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            bp2-go-mod-
 
       - name: Cache
         uses: actions/cache@v6
@@ -225,8 +229,8 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/.cache/golangci-lint
-          key: bp-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
-          restore-keys: bp-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+          key: bp2-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: bp2-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
 
       - name: Code quality test (Linux)
         uses: golangci/golangci-lint-action@v9
@@ -335,19 +339,19 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.mod-cache }}
-          key: bp-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: bp2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            bp-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
-            bp-go-mod-
+            bp2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            bp2-go-mod-
 
       - name: Build cache
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.build-cache }}
-          key: bp-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: bp2-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            bp-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
-            bp-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
+            bp2-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+            bp2-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
 
       - name: Set global environment variables
         run: |
