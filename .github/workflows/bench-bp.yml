@@ -122,9 +122,9 @@ jobs:
 
       - name: Install Libraries on Linux
         run: |
-          sudo modprobe fuse
-          sudo chmod 666 /dev/fuse
-          sudo chown root:$USER /etc/fuse.conf
+          # ci-bench: guarded so containerised runners without a FUSE device still build (no-op on GitHub-hosted)
+          if sudo modprobe fuse 2>/dev/null || [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; else echo "::warning::no FUSE device on this runner"; fi
+          sudo chown root:$USER /etc/fuse.conf || true
           sudo apt-get update
           sudo apt-get install -y fuse3 libfuse-dev rpm pkg-config git-annex git-annex-remote-rclone nfs-common
           # The podman static bundle in runner image ubuntu24/20260726.254 and
