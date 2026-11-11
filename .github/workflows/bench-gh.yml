@@ -96,10 +96,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.mod-cache }}
-          key: gh2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            gh2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
-            gh2-go-mod-
+            gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            gh3-go-mod-
 
       # The build cache holds compiled artifacts which are specific to the
       # OS, arch and Go version, so it is kept per job.
@@ -107,10 +107,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.build-cache }}
-          key: gh2-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: gh3-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            gh2-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
-            gh2-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
+            gh3-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+            gh3-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
 
       - name: Set environment variables
         run: |
@@ -122,6 +122,8 @@ jobs:
 
       - name: Install Libraries on Linux
         run: |
+          # ci-bench: if this runner's resolver cannot resolve the Ubuntu archive (GitHub-hosted Azure DNS failure seen 2026-11-11), fall back to public DNS; no-op otherwise
+          if ! getent hosts archive.ubuntu.com >/dev/null; then echo "::warning::DNS fallback to 1.1.1.1"; sudo mkdir -p /etc/systemd/resolved.conf.d; printf '[Resolve]\nDNS=1.1.1.1 8.8.8.8\nDomains=~.\n' | sudo tee /etc/systemd/resolved.conf.d/bench.conf; sudo systemctl restart systemd-resolved; sleep 2; getent hosts archive.ubuntu.com || true; fi
           # ci-bench: guarded so containerised runners without a FUSE device still build (no-op on GitHub-hosted)
           if sudo modprobe fuse 2>/dev/null || [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; else echo "::warning::no FUSE device on this runner"; fi
           sudo chown root:$USER /etc/fuse.conf || true
@@ -218,10 +220,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/go/pkg/mod
-          key: gh2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            gh2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
-            gh2-go-mod-
+            gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            gh3-go-mod-
 
       - name: Cache
         uses: actions/cache@v6
@@ -229,8 +231,8 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/.cache/golangci-lint
-          key: gh2-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
-          restore-keys: gh2-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+          key: gh3-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: gh3-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
 
       - name: Code quality test (Linux)
         uses: golangci/golangci-lint-action@v9
@@ -339,19 +341,19 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.mod-cache }}
-          key: gh2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            gh2-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
-            gh2-go-mod-
+            gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            gh3-go-mod-
 
       - name: Build cache
         uses: actions/cache@v6
         with:
           path: ${{ steps.go-paths.outputs.build-cache }}
-          key: gh2-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          key: gh3-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            gh2-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
-            gh2-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
+            gh3-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+            gh3-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-
 
       - name: Set global environment variables
         run: |
