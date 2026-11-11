@@ -1,0 +1,20 @@
+name: bp-verify
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: bp-ubuntu-latest-x64-8x
+    steps:
+      - run: |
+          echo "nproc=$(nproc)"; free -g; df -h / /tmp
+          echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
+          echo "ANDROID_NDK=$ANDROID_NDK ANDROID_HOME=$ANDROID_HOME"
+          cat /etc/os-release | head -3; uname -r
+          which go python3 make gcc clang sudo docker || true
+          sudo -n true && echo SUDO_OK
+          sudo modprobe fuse && echo MODPROBE_OK || echo MODPROBE_FAIL
+          ls -l /dev/fuse || true
+          lscpu | grep -E 'Model name|^CPU\(s\)|MHz' || true
+          env | grep -E '^ACTIONS_|^RUNNER_' | grep -vi token | cut -c1-120
