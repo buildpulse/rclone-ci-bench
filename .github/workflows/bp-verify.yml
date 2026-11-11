@@ -5,7 +5,7 @@ permissions:
   contents: read
 jobs:
   probe:
-    runs-on: bp-ubuntu-latest-x64-8x
+    runs-on: bp-ubuntu-latest-x64-4x
     steps:
       - run: |
           echo "nproc=$(nproc)"; free -g; df -h / /tmp

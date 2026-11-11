@@ -56,7 +56,7 @@ jobs:
 
     name: ${{ matrix.job_name }}
 
-    runs-on: bp-ubuntu-latest-x64-8x
+    runs-on: bp-ubuntu-latest-x64-4x
 
     steps:
       - name: Get runner parameters
@@ -188,7 +188,7 @@ jobs:
   lint:
     timeout-minutes: 30
     name: "lint"
-    runs-on: bp-ubuntu-latest-x64-8x
+    runs-on: bp-ubuntu-latest-x64-4x
 
     steps:
       - name: Get runner parameters
@@ -301,7 +301,7 @@ jobs:
   android:
     timeout-minutes: 30
     name: "android-all"
-    runs-on: bp-ubuntu-latest-x64-8x
+    runs-on: bp-ubuntu-latest-x64-4x
 
     steps:
       - name: Get runner parameters
