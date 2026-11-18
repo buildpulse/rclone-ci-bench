@@ -1,0 +1,26 @@
+# Sizes for a minimal Android toolchain in our runner image.
+name: android-size
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gh:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          A=$ANDROID_HOME
+          sudo du -sh $A/platforms/android-36 $A/platforms/android-35 $A/ndk/27.3.13750724 $A/cmdline-tools/* $A/platform-tools $A/build-tools/36.0.0 $A/licenses 2>/dev/null
+          ls $A/cmdline-tools; cat $A/cmdline-tools/latest/source.properties 2>/dev/null | grep -i revision
+          sudo du -sh /usr/lib/jvm/* 2>/dev/null
+  bp:
+    runs-on: bp-ubuntu-latest-x64-4x
+    steps:
+      - run: |
+          sudo apt-get update -qq
+          for p in openjdk-21-jdk-headless openjdk-17-jdk-headless; do
+            echo "$p: $(apt-get install -s -y --no-install-recommends $p 2>/dev/null | grep -c '^Inst') packages"
+            apt-cache show $p | grep -m1 '^Installed-Size'
+          done
+          df -h / | cat
+          sudo apt-get install -y -qq --no-install-recommends openjdk-21-jdk-headless >/dev/null && sudo du -sh /usr/lib/jvm/* && java -version 2>&1 | head -1
