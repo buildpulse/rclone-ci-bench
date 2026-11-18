@@ -1,0 +1,83 @@
+# Measures what limits restoring the other_os Go build cache (~3.1 GB) on
+# each side: per-second CPU (user/sys/iowait) and root-disk writes (MB/s, IOPS)
+# while actions/cache extracts it. Restore only; never saves a cache.
+name: cache-probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - side: bp
+            runs_on: bp-ubuntu-latest-x64-4x
+            prefix: bp3
+          - side: gh
+            runs_on: ubuntu-latest
+            prefix: gh3
+    name: probe-${{ matrix.side }}
+    runs-on: ${{ matrix.runs_on }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Get runner parameters
+        id: p
+        run: |
+          echo "year-week=$(date -u "+%Y%V")" >> $GITHUB_OUTPUT
+          echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v7
+      - name: Install Go
+        id: setup-go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '~1.27.4'
+          check-latest: true
+          cache: false
+      - name: Go paths and machine
+        id: go
+        run: |
+          echo "build-cache=$(go env GOCACHE)" >> $GITHUB_OUTPUT
+          nproc; free -g | head -2; df -h / "$RUNNER_TEMP" | cat
+          lsblk -o NAME,SIZE,TYPE,MOUNTPOINT | cat
+          echo "root device: $(findmnt -no SOURCE /)"
+      - name: Start sampler
+        run: |
+          nohup bash -c 'while :; do echo "T $(date +%s.%N)"; head -1 /proc/stat; grep -E " (nvme[0-9]+n[0-9]+|[sxv]?d[a-z]) " /proc/diskstats; sleep 1; done' > /tmp/samples.log 2>&1 &
+          sleep 2; grep -E "^ *[0-9]" /tmp/samples.log | head -4
+      - name: Build cache (restore only)
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ steps.go.outputs.build-cache }}
+          key: ${{ matrix.prefix }}-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ matrix.prefix }}-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-
+      - name: Report
+        run: |
+          sleep 2; pkill -f 'while :; do echo "T' || true
+          echo "files: $(find "$(go env GOCACHE)" -type f | wc -l)  bytes: $(du -sb "$(go env GOCACHE)" | cut -f1)"
+          python3 - <<'EOF'
+          import re
+          S=[];cur=None
+          for l in open('/tmp/samples.log'):
+              p=l.split()
+              if p[0]=='T': cur={'t':float(p[1]),'w':0,'ws':0}; S.append(cur)
+              elif p[0]=='cpu': cur['cpu']=list(map(int,p[1:9]))
+              elif len(p)>10: cur.setdefault('d',{})[p[2]]=(int(p[7]),int(p[9]))
+          tot_by={}
+          for x in S:
+              for k,v in x.get('d',{}).items(): tot_by[k]=v[1]
+          first={k:v[1] for k,v in S[0].get('d',{}).items()}
+          dev=max(tot_by,key=lambda k:tot_by[k]-first.get(k,0)); print("busiest disk:",dev)
+          for x in S: x['w'],x['ws']=x.get('d',{}).get(dev,(0,0))
+          print("sec  user%  sys%  iowait%  idle%  wMB/s  wIOPS")
+          for a,b in zip(S,S[1:]):
+              if 'cpu' not in a or 'cpu' not in b: continue
+              d=[y-x for x,y in zip(a['cpu'],b['cpu'])]; tot=sum(d) or 1; dt=b['t']-a['t']
+              u=(d[0]+d[1])*100/tot; s=(d[2]+d[5]+d[6])*100/tot; io=d[4]*100/tot; idle=d[3]*100/tot
+              wmb=(b['ws']-a['ws'])*512/1e6/dt; wio=(b['w']-a['w'])/dt
+              if wmb>1 or u>20: print(f"{b['t']-S[0]['t']:5.0f} {u:5.0f} {s:5.0f} {io:7.0f} {idle:6.0f} {wmb:6.0f} {wio:6.0f}")
+          EOF
