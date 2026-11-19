@@ -1,0 +1,56 @@
+# A/B for buildpulse/cache parallel ranged download (feat/parallel-download)
+# against v7, restoring the same 3.3 GB object cache-probe-s3.yml saved.
+# Also checks the restored tree is byte-identical between the two.
+name: cache-parallel-ab
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        ref: [feat/parallel-download, v7, feat/parallel-download]
+    name: restore-${{ matrix.ref }}
+    runs-on: bp-ubuntu-latest-x64-4x
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Get runner parameters
+        id: p
+        run: |
+          echo "year-week=$(date -u "+%Y%V")" >> $GITHUB_OUTPUT
+          echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v7
+      - name: Install Go
+        id: setup-go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '~1.27.4'
+          check-latest: true
+          cache: false
+      - name: Go paths
+        id: go
+        run: echo "build-cache=$(go env GOCACHE)" >> $GITHUB_OUTPUT
+      - name: Fetch the action under test
+        uses: actions/checkout@v7
+        with:
+          repository: buildpulse/cache
+          ref: ${{ matrix.ref }}
+          path: .bpcache
+      - name: S3 restore
+        id: s3
+        uses: ./.bpcache/restore
+        with:
+          path: ${{ steps.go.outputs.build-cache }}
+          key: s3probe-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          fail-on-cache-miss: true
+      - name: Verify the restored tree
+        run: |
+          echo "files: $(find "$(go env GOCACHE)" -type f | wc -l)"
+          echo "bytes: $(du -sb "$(go env GOCACHE)" | cut -f1)"
+          echo "tree digest: $(cd "$(go env GOCACHE)" && find . -type f -printf '%p %s\n' | LC_ALL=C sort | sha256sum | cut -c1-16)"
+          echo "sample content digest: $(cd "$(go env GOCACHE)" && find . -type f -name '*-d' | LC_ALL=C sort | head -2000 | xargs cat | sha256sum | cut -c1-16)"
