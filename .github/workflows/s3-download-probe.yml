@@ -1,0 +1,31 @@
+# Is the in-region S3 download slow, or is buildpulse/cache's single-stream
+# download slow? Downloads the cache object cache-probe-s3.yml saved, three
+# ways, on the same runner type. Uses the job's own cache credentials for
+# these commands only (never exported to the job).
+name: s3-download-probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: bp-ubuntu-latest-x64-4x
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Download three ways
+        run: |
+          set -euo pipefail
+          export AWS_SHARED_CREDENTIALS_FILE="$BP_CACHE_AWS_CREDENTIALS_FILE" AWS_PROFILE="$BP_CACHE_AWS_PROFILE" AWS_REGION=us-west-2
+          command -v aws >/dev/null || { curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/a.zip && unzip -q /tmp/a.zip -d /tmp && sudo /tmp/aws/install >/dev/null; }
+          B=bp-runners-cache-gha-production
+          K=$(aws s3 ls "s3://$B/org-buildpulse-s-organiz-4b743ef5/s3probe-go-build-other_os-" --recursive | awk '{print $4}' | head -1)
+          SZ=$(aws s3api head-object --bucket $B --key "$K" --query ContentLength --output text)
+          echo "object bytes: $SZ"
+          t(){ local s=$(date +%s.%N); "$@"; local e=$(date +%s.%N); python3 -c "d=$e-$s; print(f'  {d:.1f} s  {$SZ/d/1e6:.0f} MB/s')"; }
+          echo "1. aws s3 cp, default (10 parallel 8 MB ranges) to /dev/null"; t aws s3 cp "s3://$B/$K" - --quiet > /dev/null
+          aws configure set default.s3.max_concurrent_requests 32 --profile "$AWS_PROFILE" 2>/dev/null || true
+          echo "2. aws s3 cp, 32 parallel 16 MB ranges, to disk"; AWS_CONFIG_FILE=/tmp/awscfg; printf '[profile %s]\ns3 =\n  max_concurrent_requests = 32\n  multipart_chunksize = 16MB\n' "$AWS_PROFILE" > /tmp/awscfg; export AWS_CONFIG_FILE; t aws s3 cp "s3://$B/$K" /tmp/obj --quiet
+          echo "3. same, piped straight into zstd + tar (what a cache restore does)"; mkdir -p /tmp/x; t bash -c "aws s3 cp 's3://$B/$K' - --quiet | zstd -d -T0 | tar -x -C /tmp/x"
+          du -sh /tmp/x
