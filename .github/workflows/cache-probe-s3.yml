@@ -1,0 +1,61 @@
+# Proof for an in-region cache: restores the same other_os Go build cache
+# (~3.1 GB packed, ~14 GB unpacked) from BuildPulse's S3 cache bucket in
+# us-west-2 instead of GitHub's cache storage, on the same runner type.
+# Uses the existing buildpulse/cache@v7 action, so nothing new is built.
+#
+# Run 1 finds nothing in S3: it restores from GitHub (bp3 key, as cache-probe.yml
+# does) and saves that cache to S3. Run 2 onward restores from S3. Compare the
+# "S3 restore" step time with cache-probe.yml's "Build cache (restore only)".
+name: cache-probe-s3
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    name: probe-bp-s3
+    runs-on: bp-ubuntu-latest-x64-4x
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Get runner parameters
+        id: p
+        run: |
+          echo "year-week=$(date -u "+%Y%V")" >> $GITHUB_OUTPUT
+          echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v7
+      - name: Install Go
+        id: setup-go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '~1.27.4'
+          check-latest: true
+          cache: false
+      - name: Go paths
+        id: go
+        run: |
+          echo "build-cache=$(go env GOCACHE)" >> $GITHUB_OUTPUT
+          echo "cache credentials file set: ${BP_CACHE_AWS_CREDENTIALS_FILE:+yes}"
+      - name: S3 restore
+        id: s3
+        uses: buildpulse/cache/restore@v7
+        with:
+          path: ${{ steps.go.outputs.build-cache }}
+          key: s3probe-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-${{ hashFiles('go.sum') }}
+      - name: Size
+        run: echo "files: $(find "$(go env GOCACHE)" -type f | wc -l)  bytes: $(du -sb "$(go env GOCACHE)" | cut -f1)"
+      - name: Seed from GitHub (S3 miss only)
+        if: steps.s3.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ steps.go.outputs.build-cache }}
+          key: bp3-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            bp3-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-
+      - name: Save to S3 (S3 miss only)
+        if: steps.s3.outputs.cache-hit != 'true'
+        uses: buildpulse/cache/save@v7
+        with:
+          path: ${{ steps.go.outputs.build-cache }}
+          key: s3probe-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-${{ hashFiles('go.sum') }}
