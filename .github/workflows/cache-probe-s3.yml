@@ -44,7 +44,8 @@ jobs:
           path: ${{ steps.go.outputs.build-cache }}
           key: s3probe-go-build-other_os-${{ steps.p.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.p.outputs.year-week }}-${{ hashFiles('go.sum') }}
       - name: Size
-        run: echo "files: $(find "$(go env GOCACHE)" -type f | wc -l)  bytes: $(du -sb "$(go env GOCACHE)" | cut -f1)"
+        run: |
+          echo "files: $(find "$(go env GOCACHE)" -type f | wc -l)  bytes: $(du -sb "$(go env GOCACHE)" | cut -f1)"
       - name: Seed from GitHub (S3 miss only)
         if: steps.s3.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v6
