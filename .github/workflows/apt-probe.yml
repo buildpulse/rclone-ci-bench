@@ -1,0 +1,35 @@
+# Proof for runners fix/drop-gh-cli-apt-source: on the runner image, apt has no
+# cli.github.com source, `apt-get update` contacts only the expected hosts and
+# finishes, and gh still works. Fails the job if the gh source is still there.
+name: apt-probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        runs_on: [bp-ubuntu-latest-x64-4x, bp-ubuntu-latest-arm64-4x]
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 10
+    steps:
+      - name: apt sources
+        run: |
+          grep -rhE '^(deb |URIs:)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u
+          cat /etc/apt/bp-mirrors.txt 2>/dev/null | head -5 || true
+          if grep -rqs 'cli\.github\.com' /etc/apt/sources.list /etc/apt/sources.list.d/; then
+            echo "::error::cli.github.com apt source is still configured"; exit 1
+          fi
+          echo "no cli.github.com apt source"
+      - name: apt-get update (timed)
+        run: |
+          s=$(date +%s); sudo apt-get update 2>&1 | tee /tmp/upd.log | grep -E '^(Get|Hit|Ign|Err|W:|E:)' | sed -E 's/ [0-9.]+ [kM]B.*//' ; e=$(date +%s)
+          echo "apt-get update took $((e-s)) s"
+          echo "hosts contacted:"; grep -oE 'https?://[^/ ]+' /tmp/upd.log | sort | uniq -c
+          ! grep -q 'cli.github.com' /tmp/upd.log
+      - name: gh still works
+        run: |
+          gh --version
+          gh api rate_limit --jq '.resources.core.limit' 2>/dev/null || echo "(gh api needs a token; binary works)"
