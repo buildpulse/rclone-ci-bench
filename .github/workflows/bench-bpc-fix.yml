@@ -1,5 +1,5 @@
 ---
-# bench-bp with every actions/cache step swapped for buildpulse/cache@fix/skip-save-on-exact-hit (S3 in
+# bench-bp with every actions/cache step swapped for buildpulse/cache@fix/restore-all-cache-paths (S3 in
 # us-west-2, next to the runners) and keys prefixed bpc3-. It uses none of the
 # repo's 10 GB GitHub cache, so it cannot evict bench-gh's caches.
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
@@ -95,7 +95,7 @@ jobs:
       # it is shared via a single key to avoid storing the same ~600 MiB in
       # every job's cache and overflowing the repo cache limit.
       - name: Module cache
-        uses: buildpulse/cache@fix/skip-save-on-exact-hit
+        uses: buildpulse/cache@fix/restore-all-cache-paths
         with:
           path: ${{ steps.go-paths.outputs.mod-cache }}
           key: bpc3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
@@ -106,7 +106,7 @@ jobs:
       # The build cache holds compiled artifacts which are specific to the
       # OS, arch and Go version, so it is kept per job.
       - name: Build cache
-        uses: buildpulse/cache@fix/skip-save-on-exact-hit
+        uses: buildpulse/cache@fix/restore-all-cache-paths
         with:
           path: ${{ steps.go-paths.outputs.build-cache }}
           key: bpc3-go-build-${{ matrix.job_name }}-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
@@ -219,7 +219,7 @@ jobs:
           cache: false
           
       - name: Module cache
-        uses: buildpulse/cache@fix/skip-save-on-exact-hit
+        uses: buildpulse/cache@fix/restore-all-cache-paths
         with:
           path: ~/go/pkg/mod
           key: bpc3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
@@ -228,7 +228,7 @@ jobs:
             bpc3-go-mod-
 
       - name: Cache
-        uses: buildpulse/cache@fix/skip-save-on-exact-hit
+        uses: buildpulse/cache@fix/restore-all-cache-paths
         with:
           path: |
             ~/.cache/go-build
@@ -340,7 +340,7 @@ jobs:
           echo "mod-cache=$(go env GOMODCACHE)" >> $GITHUB_OUTPUT
 
       - name: Module cache
-        uses: buildpulse/cache@fix/skip-save-on-exact-hit
+        uses: buildpulse/cache@fix/restore-all-cache-paths
         with:
           path: ${{ steps.go-paths.outputs.mod-cache }}
           key: bpc3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
@@ -349,7 +349,7 @@ jobs:
             bpc3-go-mod-
 
       - name: Build cache
-        uses: buildpulse/cache@fix/skip-save-on-exact-hit
+        uses: buildpulse/cache@fix/restore-all-cache-paths
         with:
           path: ${{ steps.go-paths.outputs.build-cache }}
           key: bpc3-go-build-android-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
