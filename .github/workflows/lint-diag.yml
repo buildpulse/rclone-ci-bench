@@ -1,0 +1,145 @@
+name: lint-diag
+
+# Why is the lint job's "Code quality test" ~15 s per GOOS on BuildPulse runners
+# and ~3 s on GitHub-hosted? Restore-only (no cache writes), same keys as
+# bench-bpc / bench-gh. Each leg: hardware facts, what exists in ~/.cache
+# before/after the restore, then golangci-lint per GOOS (timed), then one
+# extra run to separate cold vs warm golangci-lint analysis cache.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-diag:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: bp-asis       # exactly the bench-bpc Cache step
+            runs-on: bp-ubuntu-latest-x64-4x
+          - leg: bp-mkdir      # workaround: make ~/.cache/golangci-lint exist first
+            runs-on: bp-ubuntu-latest-x64-4x
+          - leg: gh            # GitHub-hosted, actions/cache restore
+            runs-on: ubuntu-latest
+    name: "lint-diag ${{ matrix.leg }}"
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Hardware + env
+        run: |
+          echo "nproc=$(nproc)"; lscpu | grep -E 'Model name|^CPU\(s\)|Thread|MHz|L3' || true
+          free -g | head -2
+          echo "HOME=$HOME  user=$(id -un)"
+          df -hT "$HOME" "$GITHUB_WORKSPACE" 2>/dev/null || df -hT "$HOME"
+          echo "--- ~/.cache at job start"; ls -la ~/.cache 2>&1 || true
+          du -sh ~/.cache/* 2>/dev/null || true
+
+      - name: Get runner parameters
+        id: get-runner-parameters
+        run: |
+          echo "year-week=$(/bin/date -u "+%Y%V")" >> $GITHUB_OUTPUT
+          echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Go
+        id: setup-go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '~1.27.4'
+          check-latest: true
+          cache: false
+
+      - name: ~/.cache after setup-go
+        run: |
+          ls -la ~/.cache 2>&1 || true
+          ls -la --time-style=full-iso -d ~/.cache/go-build 2>&1 || true
+          ls ~/.cache/go-build 2>/dev/null | head -3; du -sh ~/.cache/go-build 2>/dev/null || true
+          go env GOCACHE GOMODCACHE GOFLAGS
+          echo "GOLANGCI_LINT_CACHE=${GOLANGCI_LINT_CACHE:-<unset>}"
+
+      - name: Module cache (bp)
+        if: startsWith(matrix.leg, 'bp-')
+        uses: buildpulse/cache/restore@v7
+        with:
+          path: ~/go/pkg/mod
+          key: bpc3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            bpc3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            bpc3-go-mod-
+
+      - name: Workaround - pre-create golangci-lint dir
+        if: matrix.leg == 'bp-mkdir'
+        run: mkdir -p ~/.cache/golangci-lint
+
+      - name: Cache (bp)
+        if: startsWith(matrix.leg, 'bp-')
+        uses: buildpulse/cache/restore@v7
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: bpc3-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: bpc3-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+
+      - name: Module cache (gh)
+        if: matrix.leg == 'gh'
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/go/pkg/mod
+          key: gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            gh3-go-mod-${{ steps.get-runner-parameters.outputs.year-week }}-
+            gh3-go-mod-
+
+      - name: Cache (gh)
+        if: matrix.leg == 'gh'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: gh3-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: gh3-golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+
+      - name: ~/.cache after restore
+        run: |
+          ls -la ~/.cache 2>&1 || true
+          du -sh ~/.cache/go-build ~/.cache/golangci-lint 2>&1 || true
+          find ~/.cache/golangci-lint -type f 2>/dev/null | wc -l
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          install-only: true
+          skip-cache: true
+
+      - name: Lint per GOOS (timed)
+        run: |
+          set -o pipefail
+          lint() {
+            local s e
+            s=$(date +%s.%N)
+            GOOS=$1 golangci-lint run >/dev/null 2>&1 || echo "lint exit $? for $1"
+            e=$(date +%s.%N)
+            awk -v a="$s" -v b="$e" -v g="$1" -v m="$2" 'BEGIN{printf "LINT %-8s %-10s %6.2f s\n", g, m, b-a}' 
+          }
+          for goos in linux windows darwin freebsd openbsd; do lint $goos as-restored; done
+          echo "golangci-lint cache now: $(du -sh ~/.cache/golangci-lint | cut -f1), $(find ~/.cache/golangci-lint -type f | wc -l) files"
+          # second pass on linux: analysis cache is now warm in every leg
+          lint linux warm-2nd
+          # and once with the analysis cache wiped (go-build still warm)
+          mv ~/.cache/golangci-lint /tmp/gl-saved
+          lint linux cold-lint
+          rm -rf ~/.cache/golangci-lint; mv /tmp/gl-saved ~/.cache/golangci-lint
+          # verbose warm run for the timing breakdown
+          golangci-lint run -v 2>&1 | grep -E 'Timing|took|cache|Memory|packages|Linters took|Running' | head -30 || true
